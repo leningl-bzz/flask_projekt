@@ -1,3 +1,10 @@
+"""
+App-Konfiguration für die Book API
+
+Initialisiert die Flask-Anwendung und die SQLAlchemy-Datenbank.
+Konfiguriert die Datenbankverbindung und lädt alle Routen.
+"""
+
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 

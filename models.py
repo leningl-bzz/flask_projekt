@@ -1,3 +1,10 @@
+"""
+Datenmodell für Bücher
+
+Definiert die Book-Klasse als SQLAlchemy-Modell für die Speicherung von Buchdaten.
+Erstellt die Datenbanktabelle, wenn sie nicht existiert.
+"""
+
 from app import db
 
 
