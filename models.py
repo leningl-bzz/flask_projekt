@@ -9,6 +9,5 @@ class Book(db.Model):
     year = db.Column(db.Integer, nullable=True)
 
 
-# Datenbanktabellen erstellen
 with db.app.app_context():
     db.create_all()

@@ -57,9 +57,12 @@ def delete_book(id):
 
 @app.route('/books/<int:id>', methods=['PUT'])
 def update_book(id):
-    book = Book.query.get_or_404(id)
-    data = request.get_json()
+    book = Book.query.get(id)
 
+    if not book:
+        return jsonify({"error": f"No book found with id {id}"}), 404
+
+    data = request.get_json()
     book.title = data.get('title', book.title)
     book.author = data.get('author', book.author)
     book.genre = data.get('genre', book.genre)
@@ -98,12 +101,21 @@ def get_books_by_year_range():
 
 
 @app.route('/books/update-fields/<int:id>', methods=['PATCH'])
-def partial_update_book(id):
-    book = Book.query.get_or_404(id)
+def patch_book(id):
+    book = Book.query.get(id)
+
+    if not book:
+        return jsonify({"error": f"No book found with id {id}"}), 404
+
     data = request.get_json()
-    if 'title' in data: book.title = data['title']
-    if 'author' in data: book.author = data['author']
-    if 'genre' in data: book.genre = data['genre']
-    if 'year' in data: book.year = data['year']
+    if 'title' in data:
+        book.title = data['title']
+    if 'author' in data:
+        book.author = data['author']
+    if 'genre' in data:
+        book.genre = data['genre']
+    if 'year' in data:
+        book.year = data['year']
+
     db.session.commit()
-    return jsonify({"message": "Book fields updated successfully"})
+    return jsonify({"message": "Book updated successfully"})
