@@ -4,21 +4,22 @@ from app import app, db
 from models import Book
 
 
-# B4G, B4F, B4E: Map, Filter und Reduce zur Verarbeitung der Bücherliste
+# B4G, B4F, B4E: Map, Filter und Reduce zur Verarbeitung der Bücherliste, C1G: Klarheit durch sprechende
+# Variablennamen und klare Struktur
 def validate_and_process_books(books, required_fields=None):
     """Validiert und verarbeitet die Bücherliste."""
     if required_fields is None:
         required_fields = ["title", "author"]
 
-    # B4G: Filter für Jahr und erforderliche Felder, A1G: Pure function zur Filterung
+    # B4G: Filter für Jahr und erforderliche Felder, A1G: Pure function zur Filterung, C1F: Filter für gültige Bücher
     valid_books = filter(lambda book: all(field in book for field in required_fields) and book.get("year", 0) > 1800,
                          books)
 
-    # B4G: Map für Grossbuchstaben-Titel, A1F: Transformation der Titel in Grossbuchstaben
+    # B4G: Map für Grossbuchstaben-Titel, A1F: Transformation der Titel in Grossbuchstaben, C1F: Titel in Grossbuchstaben umwandeln
     processed_books = map(lambda book: {**book, "title": book["title"].upper()}, valid_books)
 
     # B4G, B4F, B4E: Reduce für komplexe Datenverarbeitung (Zählen, Summieren),
-    # A1E: Aggregation von Daten mit funktionalem Ansatz, B3F: Lambda mit zwei Argumenten in reduce
+    # A1E: Aggregation von Daten mit funktionalem Ansatz, B3F: Lambda mit zwei Argumenten in reduce, C1E: Zusammenfassen der Daten
     aggregated_data = reduce(lambda acc, book: {
         "count": acc["count"] + 1,
         "total_years": acc["total_years"] + book["year"],
@@ -107,7 +108,8 @@ def index():
 @app.route('/books/process-data', methods=['POST'])
 def process_books_data_endpoint():
     """API-Endpunkt zur Verarbeitung der Bücherliste."""
-    books = request.get_json()
+    data = request.get_json()
+    books = data.get("books", [])
     result = validate_and_process_books(books)
     return jsonify(result)
 
