@@ -1,376 +1,140 @@
-"""
-Book API
-
-Eine einfache RESTful API zur Verwaltung einer Bücherdatenbank mit Flask und SQLAlchemy.
-Unterstützt CRUD-Operationen sowie flexible Filter- und Sortiermöglichkeiten.
-"""
-
+from functools import reduce
 from flask import request, jsonify
 from app import app, db
 from models import Book
-from functools import reduce
 
 
+# B4G, B4F, B4E: Map, Filter und Reduce zur Verarbeitung der Bücherliste
+def validate_and_process_books(books, required_fields=None):
+    """Validiert und verarbeitet die Bücherliste."""
+    if required_fields is None:
+        required_fields = ["title", "author"]
+
+    # B4G: Filter für Jahr und erforderliche Felder, A1G: Pure function zur Filterung
+    valid_books = filter(lambda book: all(field in book for field in required_fields) and book.get("year", 0) > 1800,
+                         books)
+
+    # B4G: Map für Grossbuchstaben-Titel, A1F: Transformation der Titel in Grossbuchstaben
+    processed_books = map(lambda book: {**book, "title": book["title"].upper()}, valid_books)
+
+    # B4G, B4F, B4E: Reduce für komplexe Datenverarbeitung (Zählen, Summieren),
+    # A1E: Aggregation von Daten mit funktionalem Ansatz, B3F: Lambda mit zwei Argumenten in reduce
+    aggregated_data = reduce(lambda acc, book: {
+        "count": acc["count"] + 1,
+        "total_years": acc["total_years"] + book["year"],
+        "books": acc["books"] + [book]
+    }, processed_books, {"count": 0, "total_years": 0, "books": []})
+
+    # B4E: Durchschnittsjahr aus Aggregation
+    average_year = aggregated_data["total_years"] / aggregated_data["count"] if aggregated_data["count"] > 0 else 0
+    return {"processed_books": aggregated_data["books"], "book_count": aggregated_data["count"],
+            "average_year": average_year}
+
+
+# B1G, B1F, B1E: Funktionale Programmierung für Buchzusammenfassungen
+def get_books_summary(books):
+    """Erstellt eine Zusammenfassung der Bücherliste."""
+    # B4G: Filter für Bücher nach Jahr
+    filtered_books = filter(lambda book: book["year"] > 1800, books)  # B3G: Einfache Lambda für Jahr-Filterung
+
+    # B4G, B4F: Map für Titel in Grossbuchstaben
+    transformed_books = list(map(lambda book: {**book, "title": book["title"].upper()}, filtered_books))
+
+    count = len(transformed_books)
+
+    return {"titles_uppercase": list(transformed_books), "book_count": count}
+
+
+# B3E: Lambda für Sortieren nach Jahr
+def sort_books_by_year(books):
+    """Sortiert die Bücherliste nach Erscheinungsjahr."""
+    return sorted(books, key=lambda book: book["year"])
+
+
+# C1G, C1F, C1E: Refactoring und Code-Optimierung für die Buch-API
+def filter_books(books, min_year=1800, required_fields=None):
+    """Filtert Bücher nach Mindestjahr und erforderlichen Feldern."""
+    if required_fields is None:
+        required_fields = ["title", "author"]
+    return filter(lambda book: all(field in book for field in required_fields) and book.get("year", 0) > min_year,
+                  books)
+
+
+# B2G, B2F, B2E: Funktionen als Objekte und Argumente, sowie Verwendung von Closures
+def to_uppercase(book):
+    """Transformiert den Buchtitel in Grossbuchstaben."""
+    return {**book, "title": book["title"].upper()}
+
+
+def to_lowercase(book):
+    """Transformiert den Buchtitel in Kleinbuchstaben."""
+    return {**book, "title": book["title"].lower()}
+
+
+# B2G: Liste mit Transformationen
+transformations = [to_uppercase, to_lowercase]
+
+
+# B2F: Funktion nimmt Transformationsfunktionen an
+def apply_transformations(books, transform_funcs):
+    """Wendet Transformationen auf die Bücherliste an."""
+    for func in transform_funcs:
+        books = map(func, books)
+    return books
+
+
+# B3E, B2E: Closure für Jahr-Filter
+def create_year_filter(min_year):
+    """Erstellt einen Jahr-Filter als Closure."""
+    return lambda book: book["year"] >= min_year  # Closure, das eine spezifische Filterfunktion zurückgibt
+
+
+# API-Endpunkte
 @app.route('/')
 def index():
-    """
-    Endpoint to show available routes in the API.
-    Returns:
-        JSON response with a welcome message and a list of all available routes.
-    """
+    """Begrüssungsnachricht der Book API."""
     return jsonify({
-        "message": "Welcome to the Book API!",
+        "message": "Willkommen zur Book API!",
         "routes": {
-            "/books": "GET all books, POST a new book",
-            "/books/<id>": "DELETE a book by ID, PUT to update a book by ID",
-            "/books/author/<author>": "GET books by a specific author using a flexible filter function",
-            "/books/author/<author>/sorted": "GET books by a specific author, sorted by year",
-            "/books/year-range?start=<start_year>&end=<end_year>": "GET books within a specific year range",
-            "/books/update-fields/<id>": "PATCH to partially update a book by ID",
-            "/books/earliest": "GET the earliest book by year",
-            "/books/summary": "GET a summary of books published after 1800, using map, filter, and reduce",
-            "/books/summary/<author>": "GET a summary of books by a specific author using map, filter, and reduce",
-            "/books/sorted": "GET books sorted by year in descending order using a lambda expression",
-            "/books/info": "GET book information with title and year using a lambda expression with multiple arguments",
-            "/books/capitalized": "GET all book titles in uppercase using a simple lambda expression",
-            "/books/filter": "GET books filtered by dynamic criteria using a closure",
-            "/books/uppercase": "GET all book titles in uppercase using map",
-            "/books/count": "GET the total count of books using reduce"
+            "/books/process-data": "POST zum Validieren und Verarbeiten der Buecherliste",
+            "/books/summary": "GET Zusammenfassung der Buecher, die nach 1800 veroeffentlicht wurden",
+            "/books/sorted": "GET Buecher nach Erscheinungsjahr sortiert",
+            "/books/add": "POST - Neues Buch hinzufuegen"
         }
     })
 
 
-def validate_data(required_fields):
-    """
-    Validates if required fields are present in the data.
-    Args:
-        required_fields (list): List of required fields.
-    Returns:
-        function: Validator function that checks if all required fields are present in the data.
-    """
-
-    def validator(data):
-        return all(field in data for field in required_fields)
-
-    return validator
-
-
-validate_book_data = validate_data(["title", "author"])
-
-
-@app.route('/books', methods=['GET'])
-def get_books():
-    """
-    Endpoint to retrieve all books from the database.
-    Returns:
-        JSON response containing a list of all books.
-    """
-    books = Book.query.all()
-    return jsonify(
-        [{"id": book.id, "title": book.title, "author": book.author, "genre": book.genre, "year": book.year} for book in
-         books]
-    )
-
-
-@app.route('/books', methods=['POST'])
-def add_book():
-    """
-    Endpoint to add a new book to the database.
-    Returns:
-        JSON response with a success message if the book is added or an error message if data is invalid.
-    """
-    data = request.get_json()
-    if data is None:
-        return jsonify({"error": "No JSON data provided"}), 400
-    if not validate_book_data(data):
-        return jsonify({"error": "Title and author are required"}), 400
-    new_book = Book(title=data['title'], author=data['author'], genre=data.get('genre'), year=data.get('year'))
-    db.session.add(new_book)
-    db.session.commit()
-    return jsonify({"message": "Book added successfully"}), 201
-
-
-@app.route('/books/<int:id>', methods=['DELETE'])
-def delete_book(id):
-    """
-    Endpoint to delete a book by its ID.
-    Returns:
-        JSON response with a success message if the book is deleted or an error if the book is not found.
-    """
-    book_to_delete = Book.query.get_or_404(id)
-    db.session.delete(book_to_delete)
-    db.session.commit()
-    return jsonify({"message": "Book deleted successfully"})
-
-
-@app.route('/books/<int:id>', methods=['PUT'])
-def update_book(id):
-    """
-    Endpoint to update a book's information by its ID.
-    Returns:
-        JSON response with a success message if the book is updated or an error if the book is not found.
-    """
-    book = Book.query.get(id)
-    if not book:
-        return jsonify({"error": f"No book found with id {id}"}), 404
-    data = request.get_json()
-    book.title = data.get('title', book.title)
-    book.author = data.get('author', book.author)
-    book.genre = data.get('genre', book.genre)
-    book.year = data.get('year', book.year)
-    db.session.commit()
-    return jsonify({"message": "Book updated successfully"})
-
-
-@app.route('/books/<int:id>', methods=['GET'])
-def get_book_by_id(id):
-    """
-    Endpoint to retrieve a specific book by its ID.
-    Returns:
-        JSON response containing the book information or an error if the book is not found.
-    """
-    book = Book.query.get(id)
-    if not book:
-        return jsonify({"error": f"No book found with id {id}"}), 404
-    return jsonify({
-        "id": book.id,
-        "title": book.title,
-        "author": book.author,
-        "genre": book.genre,
-        "year": book.year
-    })
-
-
-def filter_books_by_author(author):
-    """
-    Filters books by the specified author.
-    Args:
-        author (str): Author name to filter books by.
-    Returns:
-        list: List of books by the specified author.
-    """
-    return Book.query.filter_by(author=author).all()
-
-
-@app.route('/books/year-range', methods=['GET'])
-def get_books_by_year_range():
-    """
-    Endpoint to retrieve books within a specified year range.
-    Returns:
-        JSON response containing a list of books within the specified year range.
-    """
-    start_year = request.args.get('start', type=int)
-    end_year = request.args.get('end', type=int)
-    books = Book.query.filter(Book.year.between(start_year, end_year)).all()
-    books = sorted(books, key=lambda x: x.year)
-    return jsonify([{"id": book.id, "title": book.title, "author": book.author, "genre": book.genre} for book in books])
-
-
-@app.route('/books/earliest', methods=['GET'])
-def get_earliest_book():
-    """
-    Endpoint to retrieve the earliest book by year.
-    Returns:
-        JSON response with the earliest book or an error if no books are found.
-    """
-    books = Book.query.all()
-    if not books:
-        return jsonify({"error": "No books found"}), 404
-    earliest_book = reduce(lambda a, b: a if a.year < b.year else b, books)
-    return jsonify({
-        "id": earliest_book.id,
-        "title": earliest_book.title,
-        "author": earliest_book.author,
-        "genre": earliest_book.genre,
-        "year": earliest_book.year
-    })
-
-
-@app.route('/books/update-fields/<int:id>', methods=['PATCH'])
-def patch_book(id):
-    """
-    Endpoint to partially update fields of a book by ID.
-    Returns:
-        JSON response with a success message if the book is updated or an error if the book is not found.
-    """
-    book = Book.query.get(id)
-    if not book:
-        return jsonify({"error": f"No book found with id {id}"}), 404
-    data = request.get_json()
-    if 'title' in data:
-        book.title = data['title']
-    if 'author' in data:
-        book.author = data['author']
-    if 'genre' in data:
-        book.genre = data['genre']
-    if 'year' in data:
-        book.year = data['year']
-    db.session.commit()
-    return jsonify({"message": "Book updated successfully"})
+@app.route('/books/process-data', methods=['POST'])
+def process_books_data_endpoint():
+    """API-Endpunkt zur Verarbeitung der Bücherliste."""
+    books = request.get_json()
+    result = validate_and_process_books(books)
+    return jsonify(result)
 
 
 @app.route('/books/summary', methods=['GET'])
-def get_books_summary():
-    """
-    Endpoint to get a summary of books published after 1800.
-    Returns:
-        JSON response with uppercase titles and total count of books published after 1800.
-    """
+def get_books_summary_endpoint():
+    """API-Endpunkt für die Buchzusammenfassung."""
     books = Book.query.all()
-    recent_books = list(filter(lambda book: book.year > 1800, books))
-    uppercase_titles = list(map(lambda book: book.title.upper(), recent_books))
-    book_count = reduce(lambda acc, _: acc + 1, recent_books, 0)
-    return jsonify({"titles": uppercase_titles, "book_count": book_count})
-
-
-@app.route('/books/summary/<string:author>', methods=['GET'])
-def get_books_summary_author(author):
-    """
-    Endpoint to get a summary of books by a specific author.
-    Args:
-        author (str): Author name to filter books by.
-    Returns:
-        JSON response with uppercase titles and total count of books by the specified author.
-    """
-    books = Book.query.all()
-    filtered_books = books if author.lower() == "all" else list(filter(lambda book: book.author == author, books))
-    transformed_titles = list(map(lambda book: book.title.upper(), filtered_books))
-    total_books = reduce(lambda acc, _: acc + 1, filtered_books, 0)
-    return jsonify({"titles": transformed_titles, "total_books": total_books})
-
-
-@app.route('/books/uppercase', methods=['GET'])
-def get_books_uppercase():
-    """
-    Endpoint to get all book titles in uppercase.
-    Returns:
-        JSON response with a list of uppercase book titles.
-    """
-    books = Book.query.all()
-    titles_uppercase = list(map(lambda book: book.title.upper(), books))
-    return jsonify(titles_uppercase)
-
-
-@app.route('/books/count', methods=['GET'])
-def get_books_count():
-    """
-    Endpoint to get the total count of books.
-    Returns:
-        JSON response with the total count of books.
-    """
-    books = Book.query.all()
-    total_books = reduce(lambda acc, _: acc + 1, books, 0)
-    return jsonify({"total_books": total_books})
+    book_dicts = [{"title": book.title, "author": book.author, "year": book.year} for book in books]
+    summary = get_books_summary(book_dicts)
+    return jsonify(summary)
 
 
 @app.route('/books/sorted', methods=['GET'])
-def get_books_sorted():
-    """
-    Endpoint to get books sorted by year in descending order.
-    Returns:
-        JSON response containing a list of books sorted by year in descending order.
-    """
+def sort_books_by_year_endpoint():
+    """API-Endpunkt zum Sortieren der Bücher nach Jahr."""
     books = Book.query.all()
-    sorted_books = sorted(books, key=lambda book: book.year, reverse=True)
-    return jsonify([{"title": book.title, "year": book.year} for book in sorted_books])
+    book_dicts = [{"title": book.title, "author": book.author, "year": book.year} for book in books]
+    sorted_books = sort_books_by_year(book_dicts)
+    return jsonify(sorted_books)
 
 
-@app.route('/books/info', methods=['GET'])
-def get_books_info():
-    """
-    Endpoint to get book information with title and year.
-    Returns:
-        JSON response with formatted title and year for each book.
-    """
-    books = Book.query.all()
-    books_info = [{"info": (lambda title, year: f"{title} ({year})")(book.title, book.year)} for book in books]
-    return jsonify(books_info)
-
-
-@app.route('/books/capitalized', methods=['GET'])
-def get_books_capitalized():
-    """
-    Endpoint to get all book titles in uppercase along with the year.
-    Returns:
-        JSON response with uppercase titles and year for each book.
-    """
-    books = Book.query.all()
-    books_capitalized = [{"title": (lambda title: title.upper())(book.title), "year": book.year} for book in books]
-    return jsonify(books_capitalized)
-
-
-def create_filter(criteria):
-    """
-    Creates a filter function based on dynamic criteria.
-    Args:
-        criteria (dict): Dictionary with filter criteria (field and value).
-    Returns:
-        function: Filter function to apply on books.
-    """
-
-    def filter_books(book):
-        return getattr(book, criteria["field"]) == criteria["value"]
-
-    return filter_books
-
-
-@app.route('/books/filter', methods=['GET'])
-def filter_books_endpoint():
-    """
-    Endpoint to filter books by dynamic criteria (e.g., author).
-    Returns:
-        JSON response with filtered books based on criteria.
-    """
-    criteria = {"field": "author", "value": "Theodor Storm"}
-    filter_func = create_filter(criteria)
-    books = Book.query.all()
-    filtered_books = [book for book in books if filter_func(book)]
-    return jsonify([{"id": book.id, "title": book.title, "author": book.author} for book in filtered_books])
-
-
-def apply_filter(data, filter_func):
-    """
-    Applies a filter function to the data.
-    Args:
-        data: Data to be filtered.
-        filter_func: Function to filter data.
-    Returns:
-        Filtered data.
-    """
-    return filter_func(data)
-
-
-def filter_books_by_author_lambda(author):
-    """
-    Filters books by author using a lambda function.
-    Args:
-        author (str): Author name to filter books by.
-    Returns:
-        list: List of books by the specified author.
-    """
-    return Book.query.filter_by(author=author).all()
-
-
-def sort_books_by_year(books):
-    """
-    Sorts books by year.
-    Args:
-        books (list): List of books to be sorted.
-    Returns:
-        list: List of books sorted by year.
-    """
-    return sorted(books, key=lambda x: x.year)
-
-
-@app.route('/books/author/<string:author>/sorted', methods=['GET'])
-def get_sorted_books_by_author(author):
-    """
-    Endpoint to get books by a specific author sorted by year.
-    Args:
-        author (str): Author name to filter and sort books by.
-    Returns:
-        JSON response containing a list of books by the specified author, sorted by year.
-    """
-    books = filter_books_by_author(author)
-    sorted_books = sort_books_by_year(books)
-    return jsonify([{"id": book.id, "title": book.title, "year": book.year} for book in sorted_books])
+@app.route('/books/add', methods=['POST'])
+def add_book():
+    """Fügt ein neues Buch zur Datenbank hinzu."""
+    data = request.get_json()
+    new_book = Book(title=data["title"], author=data["author"], year=data.get("year", 0), genre=data.get("genre", ""))
+    db.session.add(new_book)
+    db.session.commit()
+    return jsonify({"message": "Buch erfolgreich hinzugefügt!"}), 201
